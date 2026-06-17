@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  email         String   @unique
+  password      String
+  name          String
+  phone         String?
+  role          String   @default("RETAIL_BUYER")
+  avatar        String?
+  state         String?
+  district      String?
+  bio           String?
+  trustScore    Float    @default(50.0)
+  isVerified    Boolean  @default(false)
+  isOrganic     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+
+  listings         CropListing[]
+  inquiries        PurchaseInquiry[]
+  wishlist         WishlistItem[]
+  cartItems        CartItem[]
+  sentMessages     Message[]         @relation("SenderMessages")
+  receivedMessages Message[]         @relation("ReceiverMessages")
+  alerts           PriceAlert[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model CropListing {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  cropName         String
+  variety          String?
+  quantity         Float
+  unit             String   @default("kg")
+  price            Float
+  state            String
+  district         String
+  images           String[]
+  harvestDate      DateTime?
+  organicCertified Boolean  @default(false)
+  description      String?
+  status           String   @default("ACTIVE")
+
+  farmerId    String            @db.ObjectId
+  farmer      User              @relation(fields: [farmerId], references: [id])
+  inquiries   PurchaseInquiry[]
+  wishlistedBy WishlistItem[]
+  cartedBy    CartItem[]
+  messages    Message[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @default(now())
+
+  @@index([state, district])
+  @@index([cropName])
+  @@index([status])
+  @@map("crop_listings")
+}
+
+model PurchaseInquiry {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  message   String
+  quantity  Float
+  unit      String   @default("kg")
+  status    String   @default("PENDING")
+
+  listingId String       @db.ObjectId
+  listing   CropListing  @relation(fields: [listingId], references: [id])
+  buyerId   String       @db.ObjectId
+  buyer     User         @relation(fields: [buyerId], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @default(now())
+
+  @@map("purchase_inquiries")
+}
+
+model WishlistItem {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String      @db.ObjectId
+  user      User        @relation(fields: [userId], references: [id])
+  listingId String      @db.ObjectId
+  listing   CropListing @relation(fields: [listingId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, listingId])
+  @@map("wishlist_items")
+}
+
+model CartItem {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String      @db.ObjectId
+  user      User        @relation(fields: [userId], references: [id])
+  listingId String      @db.ObjectId
+  listing   CropListing @relation(fields: [listingId], references: [id])
+  quantity  Float
+  createdAt DateTime    @default(now())
+
+  @@unique([userId, listingId])
+  @@map("cart_items")
+}
+
+model CropPrice {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  cropName   String
+  variety    String?
+  state      String
+  district   String
+  market     String?
+  minPrice   Float
+  maxPrice   Float
+  modalPrice Float
+  priceDate  DateTime @default(now())
+  source     String   @default("mandi")
+  createdAt  DateTime @default(now())
+
+  @@index([cropName, state, district])
+  @@index([priceDate])
+  @@map("crop_prices")
+}
+
+model Message {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  content    String
+  senderId   String       @db.ObjectId
+  sender     User         @relation("SenderMessages", fields: [senderId], references: [id])
+  receiverId String       @db.ObjectId
+  receiver   User         @relation("ReceiverMessages", fields: [receiverId], references: [id])
+  listingId  String?      @db.ObjectId
+  listing    CropListing? @relation(fields: [listingId], references: [id])
+  isRead     Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+
+  @@index([senderId, receiverId])
+  @@map("messages")
+}
+
+model PriceAlert {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id])
+  cropName    String
+  state       String?
+  district    String?
+  targetPrice Float?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("price_alerts")
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  body      String
+  type      String   @default("info")
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String?  @db.ObjectId
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  Json?
+  newValue  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
