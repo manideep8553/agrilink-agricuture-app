@@ -1,0 +1,179 @@
+# ===========================
+# Agrilink - Production .gitignore
+# ===========================
+
+# ---------------------------
+# Dependencies
+# ---------------------------
+node_modules/
+.pnp
+.pnp.js
+
+# ---------------------------
+# Build & Output
+# ---------------------------
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.vercel/
+.netlify/
+
+# ---------------------------
+# Vite
+# ---------------------------
+.vite/
+
+# ---------------------------
+# TypeScript
+# ---------------------------
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ---------------------------
+# Environment & Secrets
+# ---------------------------
+.env
+.env.*
+!.env.example
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+*.pem
+*.key
+*.cert
+*.crt
+firebase-service-account.json
+serviceAccountKey.json
+credentials.json
+
+# ---------------------------
+# Prisma
+# ---------------------------
+# prisma/migrations/ (uncomment if migrations are auto-generated)
+prisma/*.db
+prisma/*.db-journal
+
+# ---------------------------
+# Logs
+# ---------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+
+# ---------------------------
+# Testing & Coverage
+# ---------------------------
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+
+# ---------------------------
+# Caches
+# ---------------------------
+.cache/
+.parcel-cache/
+.stylelintcache
+*.tsbuildinfo
+.eslintcache
+.node_repl_history
+
+# ---------------------------
+# Turbo & Monorepo
+# ---------------------------
+.turbo/
+.nx/
+
+# ---------------------------
+# OS Files
+# ---------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------------------------
+# IDE & Editor
+# ---------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+.cursor/
+.cursorrules
+
+# ---------------------------
+# Package Manager
+# ---------------------------
+.yarn-integrity
+.yarn/
+.npm/
+pnpm-lock.yaml  # uncomment if using npm
+package-lock.json  # uncomment if using pnpm/yarn
+yarn.lock  # uncomment if using npm/pnpm
+
+# ---------------------------
+# Uploads & User Content
+# ---------------------------
+uploads/
+public/uploads/
+public/images/uploads/
+backend/uploads/
+
+# ---------------------------
+# Database Dumps
+# ---------------------------
+*.sql
+*.sql.gz
+*.dump
+*.bak
+dump.rdb
+
+# ---------------------------
+# Docker
+# ---------------------------
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# ---------------------------
+# Certificates & Keys
+# ---------------------------
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+
+# ---------------------------
+# Misc / Deployment
+# ---------------------------
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+.env.development
+.env.production
