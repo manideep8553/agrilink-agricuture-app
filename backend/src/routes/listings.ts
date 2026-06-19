@@ -4,7 +4,9 @@ import { prisma } from '../index';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { AppError } from '../middleware/errorHandler';
-import { uploadToCloudinary } from '../services/cloudinary';
+import { uploadMultipleToCloudinary } from '../services/cloudinary';
+import { logAudit } from '../services/audit';
+import { cacheDel } from '../services/redis';
 
 const router = Router();
 
@@ -24,44 +26,10 @@ const createListingSchema = z.object({
   }),
 });
 
-/**
- * @swagger
- * /listings:
- *   get:
- *     tags: [Listings]
- *     summary: Get all crop listings
- *     parameters:
- *       - in: query
- *         name: page
- *         schema: { type: integer }
- *       - in: query
- *         name: limit
- *         schema: { type: integer }
- *       - in: query
- *         name: cropName
- *         schema: { type: string }
- *       - in: query
- *         name: state
- *         schema: { type: string }
- *       - in: query
- *         name: district
- *         schema: { type: string }
- *       - in: query
- *         name: minPrice
- *         schema: { type: number }
- *       - in: query
- *         name: maxPrice
- *         schema: { type: number }
- *       - in: query
- *         name: organicCertified
- *         schema: { type: boolean }
- *     responses:
- *       200: { description: List of listings }
- */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { page = 1, limit = 20, cropName, state, district, minPrice, maxPrice, organicCertified, sortBy, sortOrder } = req.query;
-    
+
     const where: any = { status: 'ACTIVE' };
     if (cropName) where.cropName = { contains: cropName as string };
     if (state) where.state = state as string;
@@ -72,12 +40,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       if (maxPrice) where.price.lte = parseFloat(maxPrice as string);
     }
     if (organicCertified === 'true') where.organicCertified = true;
-    
+
     const orderBy: any = {};
     if (sortBy === 'price') orderBy.price = sortOrder === 'desc' ? 'desc' : 'asc';
     else if (sortBy === 'date') orderBy.createdAt = sortOrder === 'asc' ? 'asc' : 'desc';
     else orderBy.createdAt = 'desc';
-    
+
     const [listings, total] = await Promise.all([
       prisma.cropListing.findMany({
         where,
@@ -90,19 +58,11 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       }),
       prisma.cropListing.count({ where }),
     ]);
-    
+
     res.json({ listings, total, page: Number(page), totalPages: Math.ceil(total / Number(limit)) });
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /listings/mine:
- *   get:
- *     tags: [Listings]
- *     summary: Get current farmer's listings
- *     security: [{ bearerAuth: [] }]
- */
 router.get('/mine', authenticate, authorize('FARMER'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const listings = await prisma.cropListing.findMany({
@@ -113,19 +73,17 @@ router.get('/mine', authenticate, authorize('FARMER'), async (req: AuthRequest, 
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /listings/{id}:
- *   get:
- *     tags: [Listings]
- *     summary: Get listing by ID
- */
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const listing = await prisma.cropListing.findUnique({
       where: { id: req.params.id },
       include: {
-        farmer: { select: { id: true, name: true, email: true, phone: true, state: true, district: true, trustScore: true, isVerified: true, isOrganic: true, avatar: true, createdAt: true } },
+        farmer: {
+          select: {
+            id: true, name: true, email: true, phone: true, state: true, district: true,
+            trustScore: true, isVerified: true, isOrganic: true, avatar: true, createdAt: true,
+          },
+        },
       },
     });
     if (!listing) throw new AppError('Listing not found', 404);
@@ -133,23 +91,15 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /listings:
- *   post:
- *     tags: [Listings]
- *     summary: Create a new listing (Farmer only)
- *     security: [{ bearerAuth: [] }]
- */
 router.post('/', authenticate, authorize('FARMER'), validate(createListingSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { cropName, variety, quantity, unit, price, state, district, images, harvestDate, organicCertified, description } = req.body;
-    
+
     let imageUrls: string[] = [];
     if (images && images.length > 0) {
-      imageUrls = await Promise.all(images.map((img: string) => uploadToCloudinary(img)));
+      imageUrls = await uploadMultipleToCloudinary(images);
     }
-    
+
     const listing = await prisma.cropListing.create({
       data: {
         cropName, variety, quantity, unit, price, state, district,
@@ -160,49 +110,48 @@ router.post('/', authenticate, authorize('FARMER'), validate(createListingSchema
         farmerId: req.user!.id,
       },
     });
-    
+
+    await logAudit('CREATE_LISTING', 'CropListing', listing.id, req.user!.id, undefined, { cropName, price, state, district }, req.ip);
+    await cacheDel(`listings:*`);
+
     res.status(201).json({ listing });
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /listings/{id}:
- *   put:
- *     tags: [Listings]
- *     summary: Update listing (Farmer only)
- *     security: [{ bearerAuth: [] }]
- */
 router.put('/:id', authenticate, authorize('FARMER'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const listing = await prisma.cropListing.findUnique({ where: { id: req.params.id } });
     if (!listing) throw new AppError('Listing not found', 404);
     if (listing.farmerId !== req.user!.id) throw new AppError('Not authorized', 403);
-    
+
+    const updateData = { ...req.body, updatedAt: new Date() };
+    if (updateData.images) {
+      updateData.images = await uploadMultipleToCloudinary(updateData.images);
+    }
+
     const updated = await prisma.cropListing.update({
       where: { id: req.params.id },
-      data: { ...req.body, updatedAt: new Date() },
+      data: updateData,
     });
-    
+
+    await logAudit('UPDATE_LISTING', 'CropListing', req.params.id, req.user!.id, { price: listing.price, status: listing.status }, { price: updated.price, status: updated.status }, req.ip);
+    await cacheDel(`listings:*`);
+
     res.json({ listing: updated });
   } catch (err) { next(err); }
 });
 
-/**
- * @swagger
- * /listings/{id}:
- *   delete:
- *     tags: [Listings]
- *     summary: Delete listing (Farmer only)
- *     security: [{ bearerAuth: [] }]
- */
 router.delete('/:id', authenticate, authorize('FARMER'), async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const listing = await prisma.cropListing.findUnique({ where: { id: req.params.id } });
     if (!listing) throw new AppError('Listing not found', 404);
     if (listing.farmerId !== req.user!.id) throw new AppError('Not authorized', 403);
-    
+
     await prisma.cropListing.delete({ where: { id: req.params.id } });
+
+    await logAudit('DELETE_LISTING', 'CropListing', req.params.id, req.user!.id, { cropName: listing.cropName }, undefined, req.ip);
+    await cacheDel(`listings:*`);
+
     res.json({ message: 'Listing deleted' });
   } catch (err) { next(err); }
 });

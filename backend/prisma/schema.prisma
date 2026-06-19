@@ -3,26 +3,27 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  email         String   @unique
-  password      String
-  name          String
-  phone         String?
-  role          String   @default("RETAIL_BUYER")
-  avatar        String?
-  state         String?
-  district      String?
-  bio           String?
-  trustScore    Float    @default(50.0)
-  isVerified    Boolean  @default(false)
-  isOrganic     Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now())
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  name       String
+  phone      String?
+  role       String   @default("RETAIL_BUYER")
+  avatar     String?
+  state      String?
+  district   String?
+  bio        String?
+  trustScore Float    @default(50.0)
+  isVerified Boolean  @default(false)
+  isOrganic  Boolean  @default(false)
+  fcmToken   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
 
   listings         CropListing[]
   inquiries        PurchaseInquiry[]
@@ -38,7 +39,7 @@ model User {
 }
 
 model CropListing {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  id               String   @id @default(cuid())
   cropName         String
   variety          String?
   quantity         Float
@@ -52,14 +53,14 @@ model CropListing {
   description      String?
   status           String   @default("ACTIVE")
 
-  farmerId    String            @db.ObjectId
-  farmer      User              @relation(fields: [farmerId], references: [id])
-  inquiries   PurchaseInquiry[]
+  farmerId   String
+  farmer     User              @relation(fields: [farmerId], references: [id])
+  inquiries  PurchaseInquiry[]
   wishlistedBy WishlistItem[]
-  cartedBy    CartItem[]
-  messages    Message[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @default(now())
+  cartedBy   CartItem[]
+  messages   Message[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @default(now())
 
   @@index([state, district])
   @@index([cropName])
@@ -68,15 +69,15 @@ model CropListing {
 }
 
 model PurchaseInquiry {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  id        String   @id @default(cuid())
   message   String
   quantity  Float
   unit      String   @default("kg")
   status    String   @default("PENDING")
 
-  listingId String       @db.ObjectId
+  listingId String
   listing   CropListing  @relation(fields: [listingId], references: [id])
-  buyerId   String       @db.ObjectId
+  buyerId   String
   buyer     User         @relation(fields: [buyerId], references: [id])
   createdAt DateTime     @default(now())
   updatedAt DateTime     @default(now())
@@ -85,10 +86,10 @@ model PurchaseInquiry {
 }
 
 model WishlistItem {
-  id        String      @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String      @db.ObjectId
+  id        String      @id @default(cuid())
+  userId    String
   user      User        @relation(fields: [userId], references: [id])
-  listingId String      @db.ObjectId
+  listingId String
   listing   CropListing @relation(fields: [listingId], references: [id])
   createdAt DateTime    @default(now())
 
@@ -97,10 +98,10 @@ model WishlistItem {
 }
 
 model CartItem {
-  id        String      @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String      @db.ObjectId
+  id        String      @id @default(cuid())
+  userId    String
   user      User        @relation(fields: [userId], references: [id])
-  listingId String      @db.ObjectId
+  listingId String
   listing   CropListing @relation(fields: [listingId], references: [id])
   quantity  Float
   createdAt DateTime    @default(now())
@@ -110,7 +111,7 @@ model CartItem {
 }
 
 model CropPrice {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  id         String   @id @default(cuid())
   cropName   String
   variety    String?
   state      String
@@ -124,18 +125,102 @@ model CropPrice {
   createdAt  DateTime @default(now())
 
   @@index([cropName, state, district])
+  @@index([cropName, priceDate])
+  @@index([state, district])
   @@index([priceDate])
   @@map("crop_prices")
 }
 
+model CropPriceHistory {
+  id         String   @id @default(cuid())
+  cropName   String
+  variety    String?
+  state      String
+  district   String
+  market     String?
+  minPrice   Float
+  maxPrice   Float
+  modalPrice Float
+  priceDate  DateTime
+  source     String   @default("mandi")
+  createdAt  DateTime @default(now())
+
+  @@index([cropName, state, district, priceDate])
+  @@index([cropName, priceDate])
+  @@index([state, district, priceDate])
+  @@index([priceDate])
+  @@map("crop_price_history")
+}
+
+model MarketTrend {
+  id                 String   @id @default(cuid())
+  cropName           String
+  state              String?
+  district           String?
+  trendDirection     String   @default("stable")
+  avgPrice           Float
+  minPrice           Float
+  maxPrice           Float
+  priceChange        Float    @default(0)
+  percentChange      Float    @default(0)
+  periodDays         Int      @default(7)
+  sampleSize         Int      @default(0)
+  calculatedAt       DateTime @default(now())
+  periodStart        DateTime
+  periodEnd          DateTime
+
+  @@index([cropName, state, district])
+  @@index([cropName, calculatedAt])
+  @@map("market_trends")
+}
+
+model PriceForecast {
+  id               String   @id @default(cuid())
+  cropName         String
+  state            String?
+  district         String?
+  forecastDate     DateTime
+  predictedPrice   Float
+  confidenceLow    Float
+  confidenceHigh   Float
+  confidenceScore  Float    @default(0.8)
+  modelUsed        String   @default("moving_average")
+  actualPrice      Float?
+  generatedAt      DateTime @default(now())
+
+  @@index([cropName, state, district, forecastDate])
+  @@index([cropName, forecastDate])
+  @@map("price_forecasts")
+}
+
+model SeasonalPattern {
+  id               String @id @default(cuid())
+  cropName         String
+  state            String?
+  district         String?
+  month            Int
+  avgPrice         Float
+  minPrice         Float
+  maxPrice         Float
+  priceVolatility  Float  @default(0)
+  sampleYears      Int    @default(1)
+  seasonType       String @default("normal")
+  recommendation   String?
+  updatedAt        DateTime @default(now())
+
+  @@unique([cropName, state, district, month])
+  @@index([cropName, month])
+  @@map("seasonal_patterns")
+}
+
 model Message {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  id         String   @id @default(cuid())
   content    String
-  senderId   String       @db.ObjectId
+  senderId   String
   sender     User         @relation("SenderMessages", fields: [senderId], references: [id])
-  receiverId String       @db.ObjectId
+  receiverId String
   receiver   User         @relation("ReceiverMessages", fields: [receiverId], references: [id])
-  listingId  String?      @db.ObjectId
+  listingId  String?
   listing    CropListing? @relation(fields: [listingId], references: [id])
   isRead     Boolean      @default(false)
   createdAt  DateTime     @default(now())
@@ -145,8 +230,8 @@ model Message {
 }
 
 model PriceAlert {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId      String   @db.ObjectId
+  id          String   @id @default(cuid())
+  userId      String
   user        User     @relation(fields: [userId], references: [id])
   cropName    String
   state       String?
@@ -159,8 +244,8 @@ model PriceAlert {
 }
 
 model Notification {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @db.ObjectId
+  id        String   @id @default(cuid())
+  userId    String
   user      User     @relation(fields: [userId], references: [id])
   title     String
   body      String
@@ -169,12 +254,13 @@ model Notification {
   data      Json?
   createdAt DateTime @default(now())
 
+  @@index([userId, createdAt])
   @@map("notifications")
 }
 
 model AuditLog {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String?  @db.ObjectId
+  id        String   @id @default(cuid())
+  userId    String?
   user      User?    @relation(fields: [userId], references: [id])
   action    String
   entity    String
@@ -184,5 +270,8 @@ model AuditLog {
   ip        String?
   createdAt DateTime @default(now())
 
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
   @@map("audit_logs")
 }

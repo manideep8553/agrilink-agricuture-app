@@ -4,7 +4,6 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Create admin user
   const adminPassword = await bcrypt.hash('admin123', 12);
   await prisma.user.upsert({
     where: { email: 'admin@agrilink.com' },
@@ -19,7 +18,6 @@ async function main() {
     },
   });
 
-  // Create sample farmer
   const farmerPassword = await bcrypt.hash('farmer123', 12);
   const farmer = await prisma.user.upsert({
     where: { email: 'farmer@agrilink.com' },
@@ -39,7 +37,6 @@ async function main() {
     },
   });
 
-  // Create sample buyer
   const buyerPassword = await bcrypt.hash('buyer123', 12);
   await prisma.user.upsert({
     where: { email: 'buyer@agrilink.com' },
@@ -56,7 +53,6 @@ async function main() {
     },
   });
 
-  // Create sample listings
   const listings = [
     { cropName: 'Organic Wheat', variety: 'Sharbati', quantity: 5000, unit: 'kg', price: 25, state: 'Punjab', district: 'Ludhiana', organicCertified: true, description: 'Premium quality organic wheat, freshly harvested.' },
     { cropName: 'Basmati Rice', variety: '1121', quantity: 2000, unit: 'kg', price: 85, state: 'Punjab', district: 'Amritsar', organicCertified: true, description: 'Long grain basmati rice, export quality.' },
